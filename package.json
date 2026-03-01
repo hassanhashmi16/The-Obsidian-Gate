@@ -1,0 +1,28 @@
+{
+  "name": "tales-and-conquest",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@huggingface/inference": "^4.13.13",
+    "@pinecone-database/pinecone": "^7.1.0",
+    "groq-sdk": "^0.37.0",
+    "mongodb": "^7.1.0",
+    "mongoose": "^9.2.3",
+    "next": "15.5.12",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.12",
+    "tailwindcss": "^4"
+  }
+}

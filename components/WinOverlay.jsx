@@ -14,6 +14,23 @@ export default function WinOverlay({ won, finalMessage, messageCount, onPlayAgai
         return "Eventually. Rami almost called security.";
     };
 
+    const handleScoreSubmit = () => {
+        if (!playerName.trim()) return;
+
+        fetch("/api/scores", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                playerName: playerName.trim(),
+                messageCount,
+                finalScore: 100, // Score logic simplifies tracking just win counts in Phase 6 as per specs.
+                difficulty,
+            }),
+        })
+            .then(() => setSubmitted(true))
+            .catch(err => console.error("Score save failed:", err));
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/95 backdrop-blur-md animate-fade-in">
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -58,28 +75,13 @@ export default function WinOverlay({ won, finalMessage, messageCount, onPlayAgai
                                     maxLength={20}
                                     className="flex-1 bg-zinc-950 border border-zinc-700/50 rounded-sm px-4 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 uppercase tracking-wider font-[family-name:var(--font-inter)]"
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && playerName.trim()) {
-                                            setSubmitted(true);
+                                        if (e.key === 'Enter') {
+                                            handleScoreSubmit();
                                         }
                                     }}
                                 />
                                 <button
-                                    onClick={() => {
-                                        if (playerName.trim()) {
-                                            fetch("/api/scores", {
-                                                method: "POST",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({
-                                                    playerName: playerName.trim(),
-                                                    messageCount,
-                                                    finalScore: 100, // Score logic simplifies tracking just win counts in Phase 6 as per specs, passing 100 as win threshold.
-                                                    difficulty,
-                                                }),
-                                            })
-                                                .then(() => setSubmitted(true))
-                                                .catch(err => console.error("Score save failed:", err));
-                                        }
-                                    }}
+                                    onClick={handleScoreSubmit}
                                     disabled={!playerName.trim()}
                                     className="px-4 py-2 bg-emerald-900/40 text-emerald-400 border border-emerald-500/30 rounded-sm text-xs font-bold uppercase tracking-widest hover:bg-emerald-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                                 >

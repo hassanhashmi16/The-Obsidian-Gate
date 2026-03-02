@@ -1,6 +1,7 @@
 import { callDoorman, callJudge } from "@/lib/groq.js"
 import { embedText } from "@/lib/embeddings.js"
 import { storeVector, findSimilarMessages } from "@/lib/pinecone.js"
+import { waitUntil } from "@vercel/functions"
 
 const WIN_THRESHOLD = 100
 const LOSE_THRESHOLD = -100
@@ -10,24 +11,30 @@ export async function POST(request) {
         const body = await request.json()
         const { userMessage, conversationHistory, currentScore, sessionId, difficulty, moodLevel } = body
 
-        // Step 1: Recall semantically relevant past messages from Pinecone
-        let retrievedContext = []
-        if (sessionId) {
+        // Step 1 & 2: Run Vector Recall and Judge logic in parallel
+        const recallPromise = async () => {
+            if (!sessionId) return [];
             try {
-                const queryVector = await embedText(userMessage)
+                const queryVector = await embedText(userMessage);
                 if (queryVector) {
-                    retrievedContext = await findSimilarMessages(sessionId, queryVector, 5)
+                    return await findSimilarMessages(sessionId, queryVector, 5);
                 }
             } catch (err) {
                 // Silently fall back to simple history if recall fails
-                console.error("Recall failed, continuing without semantic memory:", err)
+                console.error("Recall failed, continuing without semantic memory:", err);
             }
-        }
+            return [];
+        };
 
-        // Step 2: Judge scores the user's message
-        const judgeResult = await callJudge(conversationHistory, userMessage)
-        const rawScoreDelta = judgeResult.score
-        const judgeReasoning = judgeResult.reasoning
+        const judgePromise = callJudge(conversationHistory, userMessage);
+
+        const [retrievedContext, judgeResult] = await Promise.all([
+            recallPromise(),
+            judgePromise
+        ]);
+
+        const rawScoreDelta = judgeResult.score;
+        const judgeReasoning = judgeResult.reasoning;
 
         // Step 3: Apply multiplier
         let scoreDelta = rawScoreDelta
@@ -76,33 +83,38 @@ export async function POST(request) {
             judgeReasoning,
         })
 
-        // Step 7: Store both messages in Pinecone — fire and forget, never awaited
+        // Step 7: Store both messages in Pinecone using Vercel's waitUntil
         if (sessionId) {
             const timestamp = Date.now()
 
-            embedText(userMessage).then((vector) => {
-                if (vector) {
-                    storeVector(
-                        sessionId,
-                        `${sessionId}-${timestamp}-user`,
-                        vector,
-                        "user",
-                        userMessage
-                    )
-                }
-            }).catch(() => { })
-
-            embedText(doormanReply).then((vector) => {
-                if (vector) {
-                    storeVector(
-                        sessionId,
-                        `${sessionId}-${timestamp}-rami`,
-                        vector,
-                        "assistant",
-                        doormanReply
-                    )
-                }
-            }).catch(() => { })
+            // Wrap the background logic in an async function inside waitUntil
+            waitUntil((async () => {
+                const results = await Promise.allSettled([
+                    embedText(userMessage).then(async (vector) => {
+                        if (vector) {
+                            await storeVector(
+                                sessionId,
+                                `${sessionId}-${timestamp}-user`,
+                                vector,
+                                "user",
+                                userMessage
+                            )
+                        }
+                    }),
+                    embedText(doormanReply).then(async (vector) => {
+                        if (vector) {
+                            await storeVector(
+                                sessionId,
+                                `${sessionId}-${timestamp}-rami`,
+                                vector,
+                                "assistant",
+                                doormanReply
+                            )
+                        }
+                    })
+                ])
+                console.log("Background vector storage completed.", results)
+            })())
         }
 
         return responsePayload
